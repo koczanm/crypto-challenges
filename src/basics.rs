@@ -67,7 +67,7 @@ pub fn single_byte_xor(hex_str: &str, letter: char) -> String {
         .iter()
         .map(|byte| byte ^ letter as u8)
         .collect::<Vec<_>>();
-    String::from_utf8(xor_result).unwrap()
+    String::from_utf8(xor_result).unwrap_or_default()
 }
 
 #[allow(dead_code)]
@@ -89,22 +89,24 @@ pub fn englishness(text: &str) -> f64 {
 }
 
 #[allow(dead_code)]
-pub fn brutforce_xor_cipher(hex_str: &str) -> String {
-    let alphabet = ('A'..='z').into_iter().collect::<Vec<_>>();
-
-    let (_, text) = alphabet
-        .iter()
-        .map(|&letter| {
-            let text = single_byte_xor(hex_str, letter);
-            (englishness(&text), text)
-        })
-        .max_by(|(score, _), (other_score, _)| score.total_cmp(other_score))
-        .unwrap();
-    text
+pub fn bruteforce_xor_cipher(hex_str: &str) -> String {
+    let ascii_chars: Vec<char> = (0..=127).map(|x| x as u8 as char).collect();
+    let text2score = ascii_chars.iter().map(|&c| {
+        let text = single_byte_xor(hex_str, c);
+        let score = englishness(&text);
+        (text, score)
+    });
+    text2score
+        .max_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(text, _)| text)
+        .unwrap()
 }
 
 #[cfg(test)]
 mod tests {
+    use std::fs::File;
+    use std::io::{BufRead, BufReader};
+
     use super::*;
 
     #[test]
@@ -125,10 +127,24 @@ mod tests {
     }
 
     #[test]
-    fn test_brutforce_xor_cipher() {
+    fn test_bruteforce_xor_cipher() {
         let hex_str = "1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736";
         let expected_result = "Cooking MC's like a pound of bacon";
 
-        assert_eq!(brutforce_xor_cipher(hex_str), expected_result);
+        assert_eq!(bruteforce_xor_cipher(hex_str), expected_result);
+    }
+
+    #[test]
+    fn test_bruteforce_xor_cipher_complex() {
+        let file = File::open("data/xor_cipher.in").unwrap();
+        let reader = BufReader::new(file);
+        let expected_result = "Now that the party is jumping\n";
+
+        let result = reader
+            .lines()
+            .map(|line| bruteforce_xor_cipher(&line.unwrap()))
+            .max_by(|a, b| englishness(a).total_cmp(&englishness(b)))
+            .unwrap();
+        assert_eq!(result, expected_result);
     }
 }
