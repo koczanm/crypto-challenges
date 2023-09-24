@@ -46,7 +46,7 @@ pub fn hex2base64(hex_str: &str) -> String {
 }
 
 #[allow(dead_code)]
-pub fn fixed_xor(hex_str: &str, other_hex_str: &str) -> String {
+pub fn xor_encode(hex_str: &str, other_hex_str: &str) -> String {
     let hex_bytes = hex::decode(hex_str).unwrap();
     let other_hex_bytes = hex::decode(other_hex_str).unwrap();
 
@@ -60,14 +60,25 @@ pub fn fixed_xor(hex_str: &str, other_hex_str: &str) -> String {
 }
 
 #[allow(dead_code)]
-pub fn single_byte_xor(hex_str: &str, letter: char) -> String {
+pub fn xor_decode_single_char(hex_str: &str, key: char) -> String {
     let hex_bytes = hex::decode(hex_str).unwrap();
 
-    let xor_result: Vec<u8> = hex_bytes
+    let result: Vec<u8> = hex_bytes
         .iter()
-        .map(|byte| byte ^ letter as u8)
+        .map(|byte| byte ^ key as u8)
         .collect::<Vec<_>>();
-    String::from_utf8(xor_result).unwrap_or_default()
+    String::from_utf8(result).unwrap_or_default()
+}
+
+#[allow(dead_code)]
+pub fn xor_encode_repeating_key(text: &str, key: &str) -> String {
+    let xor_result = text
+        .bytes()
+        .zip(key.bytes().cycle())
+        .map(|(letter, key_char)| letter ^ key_char)
+        .collect::<Vec<_>>();
+
+    hex::encode(xor_result)
 }
 
 #[allow(dead_code)]
@@ -89,10 +100,10 @@ pub fn englishness(text: &str) -> f64 {
 }
 
 #[allow(dead_code)]
-pub fn bruteforce_xor_cipher(hex_str: &str) -> String {
+pub fn xor_bruteforce_single_char(hex_str: &str) -> String {
     let ascii_chars: Vec<char> = (0..=127).map(|x| x as u8 as char).collect();
     let text2score = ascii_chars.iter().map(|&c| {
-        let text = single_byte_xor(hex_str, c);
+        let text = xor_decode_single_char(hex_str, c);
         let score = englishness(&text);
         (text, score)
     });
@@ -123,7 +134,7 @@ mod tests {
         let other_hex_str = "686974207468652062756c6c277320657965";
         let expected_result = "746865206b696420646f6e277420706c6179";
 
-        assert_eq!(fixed_xor(hex_str, other_hex_str), expected_result);
+        assert_eq!(xor_encode(hex_str, other_hex_str), expected_result);
     }
 
     #[test]
@@ -131,7 +142,7 @@ mod tests {
         let hex_str = "1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736";
         let expected_result = "Cooking MC's like a pound of bacon";
 
-        assert_eq!(bruteforce_xor_cipher(hex_str), expected_result);
+        assert_eq!(xor_bruteforce_single_char(hex_str), expected_result);
     }
 
     #[test]
@@ -142,9 +153,18 @@ mod tests {
 
         let result = reader
             .lines()
-            .map(|line| bruteforce_xor_cipher(&line.unwrap()))
+            .map(|line| xor_bruteforce_single_char(&line.unwrap()))
             .max_by(|a, b| englishness(a).total_cmp(&englishness(b)))
             .unwrap();
         assert_eq!(result, expected_result);
+    }
+
+    #[test]
+    fn tets_repeating_key_xor() {
+        let text = "Burning 'em, if you ain't quick and nimble\nI go crazy when I hear a cymbal";
+        let key = "ICE";
+        let expected_result= "0b3637272a2b2e63622c2e69692a23693a2a3c6324202d623d63343c2a26226324272765272a282b2f20430a652e2c652a3124333a653e2b2027630c692b20283165286326302e27282f";
+
+        assert_eq!(xor_encode_repeating_key(text, key), expected_result);
     }
 }
